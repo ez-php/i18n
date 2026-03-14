@@ -1,18 +1,18 @@
-# ezphp/i18n
+# ez-php/i18n
 
-Internationalisation module for the [ez-php framework](https://github.com/ezphp/framework) — file-based translations with dot-notation keys and locale fallback.
+Internationalisation module for the [ez-php framework](https://github.com/ez-php/framework) — file-based translations with dot-notation keys and locale fallback.
 
-[![CI](https://github.com/ezphp/i18n/actions/workflows/ci.yml/badge.svg)](https://github.com/ezphp/i18n/actions/workflows/ci.yml)
+[![CI](https://github.com/ez-php/i18n/actions/workflows/ci.yml/badge.svg)](https://github.com/ez-php/i18n/actions/workflows/ci.yml)
 
 ## Requirements
 
 - PHP 8.5+
-- ezphp/framework ^1.0
+- ez-php/framework ^1.0
 
 ## Installation
 
 ```bash
-composer require ezphp/i18n
+composer require ez-php/i18n
 ```
 
 ## Setup

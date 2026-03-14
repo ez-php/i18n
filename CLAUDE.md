@@ -86,7 +86,7 @@ When creating a new module or `CLAUDE.md` anywhere in this repository:
 
 **CLAUDE.md structure:**
 - Start with the full content of `CODING_GUIDELINES.md`, verbatim
-- Then add `---` followed by `# Package: ezphp/<name>` (or `# Directory: <name>`)
+- Then add `---` followed by `# Package: ez-php/<name>` (or `# Directory: <name>`)
 - Module-specific section must cover:
   - Source structure (file tree with one-line descriptions per file)
   - Key classes and their responsibilities
@@ -100,7 +100,7 @@ When creating a new module or `CLAUDE.md` anywhere in this repository:
 **Docker setup:** copy `docker-compose.yml`, `docker/`, `.env.example` and `start.sh` from the repository root and adapt them for the module (service names, ports, required services). Use a unique `DB_PORT` in `.env.example` that is not used by any other package — increment by one per package starting with `3306` (root).
 ---
 
-# Package: ezphp/i18n
+# Package: ez-php/i18n
 
 Locale-based translator — loads PHP array language files and resolves keys with placeholder replacement.
 
@@ -223,8 +223,8 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 | Concern | Where it belongs |
 |---|---|
 | Locale auto-detection from `Accept-Language` | Application middleware |
-| Pluralisation rules | Application layer or a future `ezphp/i18n` extension |
+| Pluralisation rules | Application layer or a future `ez-php/i18n` extension |
 | Date/number/currency formatting | PHP `Intl` extension, application layer |
-| Translation of validation error messages | `ezphp/validation` (injects `Translator` optionally) |
+| Translation of validation error messages | `ez-php/validation` (injects `Translator` optionally) |
 | Loading translations from a database | Application-level `Translator` subclass or decorator |
 | Message compilation / caching to PHP files | Out of scope — OPcache handles PHP array files natively |

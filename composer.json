@@ -9,11 +9,11 @@
       "email": "andreas.uretschnig@gmail.com"
     }
   ],
-  "keywords": ["i18n", "internationalization", "translation", "localisation", "php", "framework", "ezphp"],
-  "homepage": "https://github.com/ezphp/i18n",
+  "keywords": ["i18n", "internationalization", "translation", "localisation", "php", "framework", "ez-php"],
+  "homepage": "https://github.com/ez-php/i18n",
   "support": {
-    "issues": "https://github.com/ezphp/i18n/issues",
-    "source": "https://github.com/ezphp/i18n"
+    "issues": "https://github.com/ez-php/i18n/issues",
+    "source": "https://github.com/ez-php/i18n"
   },
   "require": {
     "php": "^8.5",
