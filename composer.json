@@ -1,0 +1,45 @@
+{
+  "name": "ezphp/i18n",
+  "description": "Internationalisation module for the ez-php framework — file-based translations with dot-notation keys and locale fallback",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Andreas Uretschnig",
+      "email": "andreas.uretschnig@gmail.com"
+    }
+  ],
+  "keywords": ["i18n", "internationalization", "translation", "localisation", "php", "framework", "ezphp"],
+  "homepage": "https://github.com/ezphp/i18n",
+  "support": {
+    "issues": "https://github.com/ezphp/i18n/issues",
+    "source": "https://github.com/ezphp/i18n"
+  },
+  "require": {
+    "php": "^8.5",
+    "ezphp/framework": "^1.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^13.0",
+    "phpstan/phpstan": "^2.1",
+    "friendsofphp/php-cs-fixer": "^3.94",
+    "phpstan/phpstan-strict-rules": "^2.0",
+    "phpstan/phpstan-deprecation-rules": "^2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "EzPhp\\I18n\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "cs": "php-cs-fixer fix",
+    "analyse": "phpstan analyse",
+    "test": "phpunit",
+    "full": "composer analyse && composer cs && composer test"
+  }
+}
