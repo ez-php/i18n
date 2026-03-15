@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace EzPhp\I18n;
 
+use EzPhp\Contracts\TranslatorInterface;
+
 /**
  * Class Translator
  *
@@ -18,7 +20,7 @@ namespace EzPhp\I18n;
  *
  * @package EzPhp\I18n
  */
-final class Translator
+final class Translator implements TranslatorInterface
 {
     /** @var array<string, array<string, mixed>> */
     private array $cache = [];
