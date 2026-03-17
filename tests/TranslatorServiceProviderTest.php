@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\I18n;
 
-use EzPhp\Contracts\ConfigInterface;
-use EzPhp\Contracts\ContainerInterface;
+use EzPhp\Application\Application;
 use EzPhp\I18n\Translator;
 use EzPhp\I18n\TranslatorServiceProvider;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Tests\TestCase;
 
 /**
  * Class TranslatorServiceProviderTest
@@ -19,11 +17,14 @@ use Tests\TestCase;
  */
 #[CoversClass(TranslatorServiceProvider::class)]
 #[UsesClass(Translator::class)]
-final class TranslatorServiceProviderTest extends TestCase
+final class TranslatorServiceProviderTest extends ApplicationTestCase
 {
     private string $langPath;
 
     /**
+     * Lang files and env vars are set before parent::setUp() so that Config
+     * picks them up lazily on the first make(Translator::class) call.
+     *
      * @return void
      */
     protected function setUp(): void
@@ -42,6 +43,22 @@ final class TranslatorServiceProviderTest extends TestCase
             $this->langPath . '/de/validation.php',
             "<?php\nreturn ['required' => 'Das Feld :field ist erforderlich.'];\n",
         );
+
+        putenv('APP_LOCALE=en');
+        putenv('APP_FALLBACK_LOCALE=en');
+        putenv('APP_LANG_PATH=' . $this->langPath);
+
+        parent::setUp();
+    }
+
+    /**
+     * @param Application $app
+     *
+     * @return void
+     */
+    protected function configureApplication(Application $app): void
+    {
+        $app->register(TranslatorServiceProvider::class);
     }
 
     /**
@@ -49,81 +66,17 @@ final class TranslatorServiceProviderTest extends TestCase
      */
     protected function tearDown(): void
     {
+        putenv('APP_LOCALE');
+        putenv('APP_FALLBACK_LOCALE');
+        putenv('APP_LANG_PATH');
+
         @unlink($this->langPath . '/en/validation.php');
         @unlink($this->langPath . '/de/validation.php');
         @rmdir($this->langPath . '/en');
         @rmdir($this->langPath . '/de');
         @rmdir($this->langPath);
-    }
 
-    /**
-     * Build a minimal container stub pre-loaded with a ConfigInterface binding.
-     */
-    private function makeContainer(string $locale = 'en', string $fallback = 'en', string $langPath = ''): ContainerInterface
-    {
-        $config = new class ($locale, $fallback, $langPath) implements ConfigInterface {
-            public function __construct(
-                private readonly string $locale,
-                private readonly string $fallback,
-                private readonly string $langPath,
-            ) {
-            }
-
-            public function get(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'app.locale' => $this->locale,
-                    'app.fallback_locale' => $this->fallback,
-                    'app.lang_path' => $this->langPath,
-                    default => $default,
-                };
-            }
-        };
-
-        return new class ($config) implements ContainerInterface {
-            /** @var array<string, callable> */
-            private array $bindings = [];
-
-            /** @var array<string, object> */
-            private array $instances = [];
-
-            public function __construct(ConfigInterface $config)
-            {
-                $this->instances[ConfigInterface::class] = $config;
-            }
-
-            public function bind(string $abstract, string|callable|null $factory = null): void
-            {
-                if (is_callable($factory)) {
-                    $this->bindings[$abstract] = $factory;
-                }
-            }
-
-            public function instance(string $abstract, object $instance): void
-            {
-                $this->instances[$abstract] = $instance;
-            }
-
-            /**
-             * @template T of object
-             * @param class-string<T> $abstract
-             * @return T
-             */
-            public function make(string $abstract): mixed
-            {
-                if (isset($this->instances[$abstract])) {
-                    /** @var T */
-                    return $this->instances[$abstract];
-                }
-
-                if (isset($this->bindings[$abstract])) {
-                    /** @var T */
-                    return $this->instances[$abstract] = ($this->bindings[$abstract])($this);
-                }
-
-                throw new \RuntimeException("No binding registered for {$abstract}.");
-            }
-        };
+        parent::tearDown();
     }
 
     /**
@@ -131,10 +84,7 @@ final class TranslatorServiceProviderTest extends TestCase
      */
     public function test_translator_is_bound_in_container(): void
     {
-        $container = $this->makeContainer(langPath: $this->langPath);
-        (new TranslatorServiceProvider($container))->register();
-
-        $this->assertInstanceOf(Translator::class, $container->make(Translator::class));
+        $this->assertInstanceOf(Translator::class, $this->app()->make(Translator::class));
     }
 
     /**
@@ -142,10 +92,9 @@ final class TranslatorServiceProviderTest extends TestCase
      */
     public function test_translator_uses_locale_from_config(): void
     {
-        $container = $this->makeContainer(locale: 'de', langPath: $this->langPath);
-        (new TranslatorServiceProvider($container))->register();
+        putenv('APP_LOCALE=de');
 
-        $this->assertSame('de', $container->make(Translator::class)->getLocale());
+        $this->assertSame('de', $this->app()->make(Translator::class)->getLocale());
     }
 
     /**
@@ -153,10 +102,10 @@ final class TranslatorServiceProviderTest extends TestCase
      */
     public function test_translator_uses_fallback_locale_from_config(): void
     {
-        $container = $this->makeContainer(locale: 'de', fallback: 'en', langPath: $this->langPath);
-        (new TranslatorServiceProvider($container))->register();
+        putenv('APP_LOCALE=de');
+        putenv('APP_FALLBACK_LOCALE=en');
 
-        $this->assertSame('en', $container->make(Translator::class)->getFallbackLocale());
+        $this->assertSame('en', $this->app()->make(Translator::class)->getFallbackLocale());
     }
 
     /**
@@ -164,10 +113,7 @@ final class TranslatorServiceProviderTest extends TestCase
      */
     public function test_translator_resolves_english_validation_messages(): void
     {
-        $container = $this->makeContainer(locale: 'en', langPath: $this->langPath);
-        (new TranslatorServiceProvider($container))->register();
-
-        $message = $container->make(Translator::class)->get('validation.required', ['field' => 'email']);
+        $message = $this->app()->make(Translator::class)->get('validation.required', ['field' => 'email']);
 
         $this->assertStringContainsString('email', $message);
         $this->assertStringNotContainsString(':field', $message);
@@ -178,10 +124,10 @@ final class TranslatorServiceProviderTest extends TestCase
      */
     public function test_translator_resolves_german_validation_messages(): void
     {
-        $container = $this->makeContainer(locale: 'de', fallback: 'en', langPath: $this->langPath);
-        (new TranslatorServiceProvider($container))->register();
+        putenv('APP_LOCALE=de');
+        putenv('APP_FALLBACK_LOCALE=en');
 
-        $message = $container->make(Translator::class)->get('validation.required', ['field' => 'E-Mail']);
+        $message = $this->app()->make(Translator::class)->get('validation.required', ['field' => 'E-Mail']);
 
         $this->assertStringContainsString('E-Mail', $message);
         $this->assertStringContainsString('erforderlich', $message);
