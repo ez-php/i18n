@@ -81,6 +81,7 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
     /**
      * @return void
+     * @throws \ReflectionException
      */
     public function test_translator_is_bound_in_container(): void
     {
@@ -89,6 +90,7 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
     /**
      * @return void
+     * @throws \ReflectionException
      */
     public function test_translator_uses_locale_from_config(): void
     {
@@ -99,6 +101,7 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
     /**
      * @return void
+     * @throws \ReflectionException
      */
     public function test_translator_uses_fallback_locale_from_config(): void
     {
@@ -110,6 +113,7 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
     /**
      * @return void
+     * @throws \ReflectionException
      */
     public function test_translator_resolves_english_validation_messages(): void
     {
@@ -121,6 +125,7 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
     /**
      * @return void
+     * @throws \ReflectionException
      */
     public function test_translator_resolves_german_validation_messages(): void
     {
