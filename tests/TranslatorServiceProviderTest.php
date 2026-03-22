@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\I18n;
 
 use EzPhp\Application\Application;
+use EzPhp\I18n\LocaleFormatter;
 use EzPhp\I18n\Translator;
 use EzPhp\I18n\TranslatorServiceProvider;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
  */
 #[CoversClass(TranslatorServiceProvider::class)]
 #[UsesClass(Translator::class)]
+#[UsesClass(LocaleFormatter::class)]
 final class TranslatorServiceProviderTest extends ApplicationTestCase
 {
     private string $langPath;
@@ -136,5 +138,25 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
         $this->assertStringContainsString('E-Mail', $message);
         $this->assertStringContainsString('erforderlich', $message);
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function test_locale_formatter_is_bound_in_container(): void
+    {
+        $this->assertInstanceOf(LocaleFormatter::class, $this->app()->make(LocaleFormatter::class));
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function test_locale_formatter_uses_locale_from_config(): void
+    {
+        putenv('APP_LOCALE=de_DE');
+
+        $this->assertSame('de_DE', $this->app()->make(LocaleFormatter::class)->getLocale());
     }
 }

@@ -31,5 +31,13 @@ final class TranslatorServiceProvider extends ServiceProvider
 
             return new Translator($locale, $fallback, $langPath);
         });
+
+        $this->app->bind(LocaleFormatter::class, function (ContainerInterface $app): LocaleFormatter {
+            $config = $app->make(ConfigInterface::class);
+            $localeRaw = $config->get('app.locale', 'en');
+            $locale = is_string($localeRaw) ? $localeRaw : 'en';
+
+            return new LocaleFormatter($locale);
+        });
     }
 }

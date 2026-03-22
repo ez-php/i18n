@@ -18,6 +18,10 @@ use EzPhp\Contracts\TranslatorInterface;
  * Key format: "<namespace>.<key>" where namespace maps to a lang file
  * and key supports dot-notation for nested arrays (e.g. "min.string").
  *
+ * The second constructor parameter accepts either a single locale string or an ordered
+ * list of fallback locales. Each locale in the chain is tried in order before the raw
+ * key is returned.
+ *
  * @package EzPhp\I18n
  */
 final class Translator implements TranslatorInterface
@@ -25,18 +29,24 @@ final class Translator implements TranslatorInterface
     /** @var array<string, array<string, mixed>> */
     private array $cache = [];
 
+    /** @var list<string> */
+    private readonly array $fallbackLocales;
+
     /**
      * Translator Constructor
      *
-     * @param string $locale
-     * @param string $fallbackLocale
-     * @param string $langPath
+     * @param string               $locale          Active locale.
+     * @param string|list<string>  $fallbackLocales Single fallback locale or ordered fallback chain.
+     * @param string               $langPath        Absolute path to the lang/ directory.
      */
     public function __construct(
         private string $locale,
-        private readonly string $fallbackLocale,
+        string|array $fallbackLocales,
         private readonly string $langPath,
     ) {
+        $this->fallbackLocales = is_string($fallbackLocales)
+            ? [$fallbackLocales]
+            : $fallbackLocales;
     }
 
     /**
@@ -55,11 +65,52 @@ final class Translator implements TranslatorInterface
         $namespace = substr($key, 0, $dotPos);
         $subKey = substr($key, $dotPos + 1);
 
-        $message = $this->resolve($namespace, $subKey, $this->locale)
-            ?? $this->resolve($namespace, $subKey, $this->fallbackLocale)
-            ?? $key;
+        $message = $this->resolveWithChain($namespace, $subKey) ?? $key;
 
         return $this->replace($message, $replacements);
+    }
+
+    /**
+     * Resolve a pluralised translation key by count.
+     *
+     * The translation value must be a pipe-separated string of variants:
+     *   'no apples|one apple|:count apples'
+     *
+     * Variant selection (zero-indexed):
+     *   - count = 0        → variant[0]
+     *   - count = 1        → variant[1] (or variant[last] if only one variant exists)
+     *   - count >= 2       → variant[2] (or variant[last])
+     *
+     * The placeholder :count is automatically injected from $count unless overridden
+     * in $replacements.
+     *
+     * @param array<string, string|int|float> $replacements
+     */
+    public function transChoice(string $key, int $count, array $replacements = []): string
+    {
+        $dotPos = strpos($key, '.');
+
+        if ($dotPos === false) {
+            return $key;
+        }
+
+        $namespace = substr($key, 0, $dotPos);
+        $subKey = substr($key, $dotPos + 1);
+
+        $message = $this->resolveWithChain($namespace, $subKey);
+
+        if ($message === null) {
+            return $key;
+        }
+
+        $parts = explode('|', $message);
+        $index = min(max(0, $count), count($parts) - 1);
+
+        if (!isset($replacements['count'])) {
+            $replacements['count'] = $count;
+        }
+
+        return $this->replace($parts[$index], $replacements);
     }
 
     /**
@@ -81,11 +132,46 @@ final class Translator implements TranslatorInterface
     }
 
     /**
+     * Returns the primary (first) fallback locale.
+     *
      * @return string
      */
     public function getFallbackLocale(): string
     {
-        return $this->fallbackLocale;
+        return $this->fallbackLocales[0] ?? '';
+    }
+
+    /**
+     * Returns the full ordered fallback locale chain.
+     *
+     * @return list<string>
+     */
+    public function getFallbackLocales(): array
+    {
+        return $this->fallbackLocales;
+    }
+
+    /**
+     * Try the primary locale first, then each fallback in order.
+     *
+     * @param string $namespace
+     * @param string $key
+     *
+     * @return string|null
+     */
+    private function resolveWithChain(string $namespace, string $key): ?string
+    {
+        $result = $this->resolve($namespace, $key, $this->locale);
+
+        foreach ($this->fallbackLocales as $fallback) {
+            if ($result !== null) {
+                break;
+            }
+
+            $result = $this->resolve($namespace, $key, $fallback);
+        }
+
+        return $result;
     }
 
     /**
