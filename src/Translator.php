@@ -52,6 +52,15 @@ final class Translator implements TranslatorInterface
     /**
      * Resolve a translation key with optional placeholder replacement.
      *
+     * Resolution order:
+     *   1. Active locale  → lang/<locale>/<namespace>.php
+     *   2. Fallback locale → lang/<fallback>/<namespace>.php
+     *   3. Raw $key returned as-is — never throws.
+     *
+     * Missing key convention: returns the raw $key string unchanged when the key
+     * cannot be found in either locale. Keys without a dot separator (no namespace)
+     * are returned immediately without any file lookup.
+     *
      * @param array<string, string|int|float> $replacements
      */
     public function get(string $key, array $replacements = []): string
