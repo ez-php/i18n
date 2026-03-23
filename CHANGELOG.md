@@ -2,6 +2,12 @@
 
 All notable changes to `ez-php/i18n` are documented here.
 
+## [v0.8.4] — 2026-03-22
+
+### Documentation
+- Update CHANGELOG for v0.8.3 [skip ci] (da0a62b)
+
+
 ## [v0.8.3] — 2026-03-22
 
 ### Documentation
