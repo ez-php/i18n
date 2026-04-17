@@ -46,6 +46,23 @@ echo $translator->get('messages.welcome', ['name' => 'Alice']);
 // Willkommen, Alice!
 ```
 
+## Locale formatting
+
+`LocaleFormatter` wraps PHP's `ext-intl` extension to format numbers, currencies, and dates in a locale-aware way:
+
+```php
+use EzPhp\I18n\LocaleFormatter;
+
+$fmt = new LocaleFormatter('de_DE');
+
+echo $fmt->number(1234567.89);         // '1.234.567,89'
+echo $fmt->currency(9.99, 'EUR');      // '9,99 €'
+echo $fmt->date(new \DateTimeImmutable('2024-06-15')); // '15.06.2024'
+echo $fmt->dateTime(new \DateTimeImmutable('2024-06-15 14:30:00')); // '15.06.2024, 14:30:00'
+```
+
+Requires PHP's `ext-intl` extension.
+
 ## License
 
 MIT — [Andreas Uretschnig](mailto:andreas.uretschnig@gmail.com)

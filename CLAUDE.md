@@ -165,11 +165,13 @@ Locale-based translator — loads PHP array language files and resolves keys wit
 ```
 src/
 ├── Translator.php                — Loads lang files, resolves dot-notation keys, replaces :placeholders
+├── LocaleFormatter.php           — Locale-aware number/currency/date formatting via ext-intl (NumberFormatter, IntlDateFormatter)
 └── TranslatorServiceProvider.php — Reads app.locale and app.fallback_locale from config; binds Translator
 
 tests/
 ├── TestCase.php                          — Base PHPUnit test case
 ├── TranslatorTest.php                    — Covers Translator: key resolution, fallback, placeholders, caching
+├── LocaleFormatterTest.php               — Covers LocaleFormatter: number, currency, date, dateTime formatting
 └── TranslatorServiceProviderTest.php     — Covers provider registration and config wiring
 ```
 
