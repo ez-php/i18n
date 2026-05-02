@@ -1,6 +1,6 @@
 {
   "name": "ez-php/i18n",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Internationalisation module for the ez-php framework — file-based translations with dot-notation keys and locale fallback",
   "type": "library",
   "license": "MIT",
