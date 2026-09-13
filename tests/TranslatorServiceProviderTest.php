@@ -71,6 +71,7 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
         putenv('APP_LOCALE');
         putenv('APP_FALLBACK_LOCALE');
         putenv('APP_LANG_PATH');
+        putenv('APP_FALLBACK_LOCALES');
 
         @unlink($this->langPath . '/en/validation.php');
         @unlink($this->langPath . '/de/validation.php');
@@ -138,6 +139,36 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
 
         $this->assertStringContainsString('E-Mail', $message);
         $this->assertStringContainsString('erforderlich', $message);
+    }
+
+    /**
+     * `app.fallback_locales` (plural) makes the multi-level fallback chain
+     * reachable from application config, not just direct Translator construction.
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function test_translator_uses_fallback_locales_chain_from_config(): void
+    {
+        putenv('APP_LOCALE=fr');
+        putenv('APP_FALLBACK_LOCALES=de,en');
+
+        $this->assertSame(['de', 'en'], $this->app()->make(Translator::class)->getFallbackLocales());
+    }
+
+    /**
+     * When app.fallback_locales is absent, the chain falls back to the single
+     * app.fallback_locale key.
+     *
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function test_translator_falls_back_to_singular_fallback_locale_when_chain_absent(): void
+    {
+        putenv('APP_LOCALE=fr');
+        putenv('APP_FALLBACK_LOCALE=de');
+
+        $this->assertSame(['de'], $this->app()->make(Translator::class)->getFallbackLocales());
     }
 
     /**

@@ -23,13 +23,11 @@ final class TranslatorServiceProvider extends ServiceProvider
         $this->app->bind(Translator::class, function (ContainerInterface $app): Translator {
             $config = $app->make(ConfigInterface::class);
             $localeRaw = $config->get('app.locale', 'en');
-            $fallbackRaw = $config->get('app.fallback_locale', 'en');
             $locale = is_string($localeRaw) ? $localeRaw : 'en';
-            $fallback = is_string($fallbackRaw) ? $fallbackRaw : 'en';
             $langPathRaw = $config->get('app.lang_path', '');
             $langPath = is_string($langPathRaw) ? $langPathRaw : '';
 
-            return new Translator($locale, $fallback, $langPath);
+            return new Translator($locale, self::resolveFallbackLocales($config), $langPath);
         });
 
         $this->app->bind(LocaleFormatter::class, function (ContainerInterface $app): LocaleFormatter {
@@ -39,5 +37,35 @@ final class TranslatorServiceProvider extends ServiceProvider
 
             return new LocaleFormatter($locale);
         });
+    }
+
+    /**
+     * Resolve the fallback locale chain from config.
+     *
+     * `app.fallback_locales` (plural, list<string>) takes precedence when set,
+     * making Translator's multi-level fallback chain reachable from config.
+     * Falls back to the single `app.fallback_locale` key (default 'en') for
+     * backward compatibility with applications that only configure one.
+     *
+     * @param ConfigInterface $config
+     *
+     * @return string|list<string>
+     */
+    private static function resolveFallbackLocales(ConfigInterface $config): string|array
+    {
+        $chainRaw = $config->get('app.fallback_locales', null);
+
+        if (is_array($chainRaw) && $chainRaw !== []) {
+            $chain = array_values(array_filter($chainRaw, 'is_string'));
+
+            if ($chain !== []) {
+                /** @var list<string> $chain */
+                return $chain;
+            }
+        }
+
+        $fallbackRaw = $config->get('app.fallback_locale', 'en');
+
+        return is_string($fallbackRaw) ? $fallbackRaw : 'en';
     }
 }

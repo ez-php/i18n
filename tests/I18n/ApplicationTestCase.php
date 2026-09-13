@@ -15,8 +15,11 @@ use RuntimeException;
  * and all service bindings are resolved lazily, env vars set before the first
  * make() call in a test method are picked up correctly.
  *
- * Set APP_LOCALE, APP_FALLBACK_LOCALE, and APP_LANG_PATH via putenv()
- * in setUp() before calling parent::setUp() to configure per-test locale.
+ * Set APP_LOCALE, APP_FALLBACK_LOCALE, APP_LANG_PATH, and (optionally) a
+ * comma-separated APP_FALLBACK_LOCALES via putenv() in setUp() before calling
+ * parent::setUp() to configure per-test locale. APP_FALLBACK_LOCALES is a
+ * test-only convenience — in a real application, `app.fallback_locales` is a
+ * PHP array set directly in config/app.php, since it is not env-backed there.
  *
  * @package Tests\I18n
  */
@@ -37,10 +40,15 @@ abstract class ApplicationTestCase extends EzPhpApplicationTestCase
 
             declare(strict_types=1);
 
+            $fallbackLocales = getenv('APP_FALLBACK_LOCALES');
+
             return [
-                'locale'          => getenv('APP_LOCALE') ?: 'en',
-                'fallback_locale' => getenv('APP_FALLBACK_LOCALE') ?: 'en',
-                'lang_path'       => getenv('APP_LANG_PATH') ?: '',
+                'locale'           => getenv('APP_LOCALE') ?: 'en',
+                'fallback_locale'  => getenv('APP_FALLBACK_LOCALE') ?: 'en',
+                'fallback_locales' => $fallbackLocales !== false && $fallbackLocales !== ''
+                    ? explode(',', $fallbackLocales)
+                    : [],
+                'lang_path'        => getenv('APP_LANG_PATH') ?: '',
             ];
             PHP;
 

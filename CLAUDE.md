@@ -54,6 +54,7 @@ composer test-classes:check  # duplicate test class names only
 - One responsibility per class — keep classes small and focused
 - Constructor injection — no service locator pattern
 - No global state unless intentional and documented
+- Concrete classes are `final` — extend behavior through composition, not inheritance. Exception-hierarchy base classes (e.g. `EzPhpException`, `HttpException`, `CacheException`) are the one carve-out, since they exist specifically to be extended.
 
 **Naming:**
 
@@ -190,20 +191,22 @@ After scaffolding:
 
 **Allocated host ports:**
 
-| Package | `DB_HOST_PORT` (MySQL) | `REDIS_PORT` | `MEILISEARCH_PORT` |
+| Package | `DB_HOST_PORT` (MySQL) | Redis host port | `MEILISEARCH_PORT` |
 |---|---|---|---|
-| root (`ez-php-project`) | 3306 | 6379 | 7700 |
+| root (`ez-php-project`) | 3306 | 6379 (`REDIS_PORT`) | 7700 |
 | `ez-php/framework` | 3307 | — | — |
 | `ez-php/orm` | 3309 | — | — |
-| `ez-php/cache` | — | 6380 | — |
-| `ez-php/queue` | 3310 | 6381 | — |
-| `ez-php/rate-limiter` | — | 6382 | — |
+| `ez-php/cache` | — | 6380 (`REDIS_HOST_PORT`) | — |
+| `ez-php/queue` | 3310 | 6381 (`REDIS_HOST_PORT`) | — |
+| `ez-php/rate-limiter` | — | 6382 (`REDIS_HOST_PORT`) | — |
 | `ez-php/search` | — | — | 7701 |
 | **next free** | **3311** | **6383** | **7702** |
 
 Only set a port for services the module actually uses. Modules without external services need no port config.
 
 > The `MEILISEARCH_PORT` column is the **host** port. Inside a Compose network the service is always reachable at `http://meilisearch:7700` regardless of the host mapping — only publish-side ports need to be unique.
+
+> The "Redis host port" column is likewise the **host**-published port. `ez-php/cache`, `ez-php/queue`, and `ez-php/rate-limiter` map it through a separate `REDIS_HOST_PORT` env var in `docker-compose.yml`, keeping `REDIS_PORT` fixed at `6379` for in-container connections (the app container always reaches Redis at `redis:6379` over the Compose network, regardless of the host mapping) — the root project is the one exception, since it has no host/container split and uses `REDIS_PORT` for both.
 
 ### 5 — Monorepo scripts
 
@@ -225,7 +228,7 @@ Locale-based translator — loads PHP array language files and resolves keys wit
 src/
 ├── Translator.php                — Loads lang files, resolves dot-notation keys, replaces :placeholders
 ├── LocaleFormatter.php           — Locale-aware number/currency/date formatting via ext-intl (NumberFormatter, IntlDateFormatter)
-└── TranslatorServiceProvider.php — Reads app.locale and app.fallback_locale from config; binds Translator
+└── TranslatorServiceProvider.php — Reads app.locale, app.fallback_locales (chain, optional) / app.fallback_locale from config; binds Translator
 
 tests/
 ├── TestCase.php                          — Base PHPUnit test case
@@ -301,12 +304,13 @@ return [
 
 ### TranslatorServiceProvider (`src/TranslatorServiceProvider.php`)
 
-Reads `app.locale` and `app.fallback_locale` from `Config` and binds `Translator` lazily.
+Reads `app.locale` and the fallback locale(s) from `Config` and binds `Translator` lazily.
 
 | Config key | Default | Meaning |
 |---|---|---|
 | `app.locale` | `'en'` | Active locale at boot time |
-| `app.fallback_locale` | `'en'` | Locale used when key is missing in active locale |
+| `app.fallback_locales` | — | Optional ordered fallback chain (`list<string>`); takes precedence over `app.fallback_locale` when set to a non-empty array. Not env-backed — set directly in `config/app.php` |
+| `app.fallback_locale` | `'en'` | Single fallback locale, used when `app.fallback_locales` is absent |
 
 The `lang/` path is resolved via `$app->basePath('lang')`.
 
@@ -317,7 +321,7 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 - **PHP array files, not YAML/JSON** — Arrays are parsed by the PHP engine (no parser needed, no extra dependency), cached by OPcache, and type-safe. Switching format would require adding a parser and losing OPcache benefits.
 - **Keys without a dot are returned as-is** — A key without a namespace separator cannot map to a file. Returning the raw key instead of throwing keeps rendering code simple (`echo $t->get('some.key')` is always safe).
 - **No locale auto-detection** — The active locale is set explicitly at construction (from config) or changed via `setLocale()`. Auto-detection from `Accept-Language` is the application's responsibility (e.g. in middleware).
-- **Fallback is a single level** — There is no chain of fallbacks. If the key is missing in both the active locale and the fallback locale, the raw key is returned. Deeper fallback chains add complexity without proportional benefit.
+- **Fallback supports an ordered chain** — `Translator`'s constructor accepts either a single fallback locale or an ordered `list<string>`; `resolveWithChain()` tries the active locale, then each fallback in order, before the raw key is returned. `TranslatorServiceProvider` wires this from the optional `app.fallback_locales` config key (falling back to the single `app.fallback_locale` when absent), so the chain is reachable from application config, not just direct construction.
 - **`setLocale()` does not invalidate the cache** — The cache is keyed by `locale/namespace`. Switching locale simply directs future lookups to a different cache bucket. Old buckets stay in memory for the request lifetime — this is acceptable since the number of locale/namespace combinations in a request is small.
 - **`Translator` is injected, not a static façade** — Unlike `Auth` and `Event`, the translator has no global state requirement. It should be constructor-injected. Use the container to resolve it.
 
