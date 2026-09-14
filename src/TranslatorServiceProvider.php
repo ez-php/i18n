@@ -7,6 +7,7 @@ namespace EzPhp\I18n;
 use EzPhp\Contracts\ConfigInterface;
 use EzPhp\Contracts\ContainerInterface;
 use EzPhp\Contracts\ServiceProvider;
+use EzPhp\Contracts\TranslatorInterface;
 
 /**
  * Class TranslatorServiceProvider
@@ -29,6 +30,11 @@ final class TranslatorServiceProvider extends ServiceProvider
 
             return new Translator($locale, self::resolveFallbackLocales($config), $langPath);
         });
+
+        $this->app->bind(
+            TranslatorInterface::class,
+            fn (ContainerInterface $app): Translator => $app->make(Translator::class),
+        );
 
         $this->app->bind(LocaleFormatter::class, function (ContainerInterface $app): LocaleFormatter {
             $config = $app->make(ConfigInterface::class);

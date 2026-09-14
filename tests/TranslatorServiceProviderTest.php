@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\I18n;
 
 use EzPhp\Application\Application;
+use EzPhp\Contracts\TranslatorInterface;
 use EzPhp\I18n\LocaleFormatter;
 use EzPhp\I18n\Translator;
 use EzPhp\I18n\TranslatorServiceProvider;
@@ -89,6 +90,18 @@ final class TranslatorServiceProviderTest extends ApplicationTestCase
     public function test_translator_is_bound_in_container(): void
     {
         $this->assertInstanceOf(Translator::class, $this->app()->make(Translator::class));
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function test_translator_interface_is_bound_in_container(): void
+    {
+        $translator = $this->app()->make(TranslatorInterface::class);
+
+        $this->assertInstanceOf(Translator::class, $translator);
+        $this->assertSame($this->app()->make(Translator::class), $translator);
     }
 
     /**
