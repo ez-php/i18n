@@ -352,6 +352,7 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 - **Fallback supports an ordered chain** — `Translator`'s constructor accepts either a single fallback locale or an ordered `list<string>`; `resolveWithChain()` tries the active locale, then each fallback in order, before the raw key is returned. `TranslatorServiceProvider` wires this from the optional `app.fallback_locales` config key (falling back to the single `app.fallback_locale` when absent), so the chain is reachable from application config, not just direct construction.
 - **`setLocale()` does not invalidate the cache** — The cache is keyed by `locale/namespace`. Switching locale simply directs future lookups to a different cache bucket. Old buckets stay in memory for the request lifetime — this is acceptable since the number of locale/namespace combinations in a request is small.
 - **`Translator` is injected, not a static façade** — Unlike `Auth` and `Event`, the translator has no global state requirement. It should be constructor-injected. Use the container to resolve it.
+- **`transChoice()`'s Slavic one/few/many exception is scoped, not general CLDR support** — Only ru/uk/be (which all share one cardinal-plural formula: `n%10==1 && n%100!=11` → one, `n%10 in 2..4 && n%100 not in 12..14` → few, else many) are recognised, and only when the active locale's two-letter prefix matches **and** the message has exactly 3 pipe-separated variants — a message with a different variant count for those locales still falls back to the plain positional formula. Polish/Czech/Slovak (4 forms) and other CLDR families are intentionally not covered; adding them means adding their own rule, not generalising this one.
 
 ---
 
@@ -370,7 +371,7 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 | Concern | Where it belongs |
 |---|---|
 | Locale auto-detection from `Accept-Language` | Application middleware |
-| Locale-specific CLDR plural rules (Polish's 4 forms, Arabic's 6, …) | Application layer or a future extension — `transChoice()` implements only pipe-separated variants selected by `min(max(0, count), variants - 1)`, which fits English-like zero/one/many languages |
+| Full CLDR plural rules (Polish's 4 forms, Arabic's 6, …) | Application layer or a future extension — `transChoice()` implements the positional `min(max(0, count), variants - 1)` formula for English-like zero/one/many languages, plus one scoped exception: the shared ru/uk/be Slavic one/few/many cardinal formula, used only when the active locale is Slavic **and** the message has exactly 3 variants (see Design Decisions) |
 | Date/number/currency formatting | PHP `Intl` extension, application layer |
 | Translation of validation error messages | `ez-php/validation` (injects `Translator` optionally) |
 | Loading translations from a database | Application-level `Translator` subclass or decorator |

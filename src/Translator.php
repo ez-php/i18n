@@ -80,6 +80,16 @@ final class Translator implements TranslatorInterface
     }
 
     /**
+     * Slavic locales (ru/uk/be and their regional variants) sharing the same
+     * one/few/many cardinal plural formula. Not the full CLDR set (Polish and
+     * Czech/Slovak use a different 4-form split) — see the module's CLAUDE.md
+     * "What Does NOT Belong Here" for the deliberate scope limit.
+     *
+     * @var list<string>
+     */
+    private const array SLAVIC_LOCALES = ['ru', 'uk', 'be'];
+
+    /**
      * Resolve a pluralised translation key by count.
      *
      * The translation value must be a pipe-separated string of variants:
@@ -89,6 +99,10 @@ final class Translator implements TranslatorInterface
      *   - count = 0        → variant[0]
      *   - count = 1        → variant[1] (or variant[last] if only one variant exists)
      *   - count >= 2       → variant[2] (or variant[last])
+     *
+     * Exception: when the active locale is one of SLAVIC_LOCALES and the message
+     * has exactly 3 variants, the standard Slavic one/few/many cardinal formula
+     * is used instead (variant[0]=one, variant[1]=few, variant[2]=many).
      *
      * The placeholder :count is automatically injected from $count unless overridden
      * in $replacements.
@@ -113,13 +127,50 @@ final class Translator implements TranslatorInterface
         }
 
         $parts = explode('|', $message);
-        $index = min(max(0, $count), count($parts) - 1);
+        $index = count($parts) === 3 && $this->isSlavicLocale()
+            ? $this->slavicPluralIndex($count)
+            : min(max(0, $count), count($parts) - 1);
 
         if (!isset($replacements['count'])) {
             $replacements['count'] = $count;
         }
 
         return $this->replace($parts[$index], $replacements);
+    }
+
+    /**
+     * @return bool
+     */
+    private function isSlavicLocale(): bool
+    {
+        return in_array(strtolower(substr($this->locale, 0, 2)), self::SLAVIC_LOCALES, true);
+    }
+
+    /**
+     * Standard Slavic cardinal plural formula (as used by CLDR for ru/uk/be):
+     *   one:  n%10==1 && n%100!=11
+     *   few:  n%10 in 2..4 && n%100 not in 12..14
+     *   many: everything else
+     *
+     * @param int $count
+     *
+     * @return int 0 (one), 1 (few), or 2 (many)
+     */
+    private function slavicPluralIndex(int $count): int
+    {
+        $n = abs($count);
+        $mod10 = $n % 10;
+        $mod100 = $n % 100;
+
+        if ($mod10 === 1 && $mod100 !== 11) {
+            return 0;
+        }
+
+        if ($mod10 >= 2 && $mod10 <= 4 && ($mod100 < 12 || $mod100 > 14)) {
+            return 1;
+        }
+
+        return 2;
     }
 
     /**

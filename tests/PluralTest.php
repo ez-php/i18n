@@ -28,6 +28,7 @@ final class PluralTest extends TestCase
         $this->langPath = sys_get_temp_dir() . '/ez-i18n-plural-' . uniqid();
 
         mkdir($this->langPath . '/en', 0o755, true);
+        mkdir($this->langPath . '/ru', 0o755, true);
 
         file_put_contents($this->langPath . '/en/messages.php', <<<'PHP'
             <?php
@@ -37,6 +38,13 @@ final class PluralTest extends TestCase
                 'binary' => 'zero|many',
                 'single' => 'always this',
                 'label'  => ':count :label|:count :labels',
+            ];
+            PHP);
+
+        file_put_contents($this->langPath . '/ru/messages.php', <<<'PHP'
+            <?php
+            return [
+                'apples' => ':count яблоко|:count яблока|:count яблок',
             ];
             PHP);
     }
@@ -219,5 +227,67 @@ final class PluralTest extends TestCase
         $t = new Translator('en', 'en', $this->langPath);
 
         $this->assertSame('nodot', $t->transChoice('nodot', 1));
+    }
+
+    // ─── Slavic one/few/many (ru) ───────────────────────────────────────────
+
+    /**
+     * n%10==1 && n%100!=11 → "one" variant.
+     *
+     * @return void
+     */
+    public function test_slavic_locale_selects_one_variant_for_1_21_101(): void
+    {
+        $t = new Translator('ru', 'en', $this->langPath);
+
+        $this->assertSame('1 яблоко', $t->transChoice('messages.apples', 1));
+        $this->assertSame('21 яблоко', $t->transChoice('messages.apples', 21));
+        $this->assertSame('101 яблоко', $t->transChoice('messages.apples', 101));
+    }
+
+    /**
+     * n%10 in 2..4 && n%100 not in 12..14 → "few" variant.
+     *
+     * @return void
+     */
+    public function test_slavic_locale_selects_few_variant_for_2_3_4_22(): void
+    {
+        $t = new Translator('ru', 'en', $this->langPath);
+
+        $this->assertSame('2 яблока', $t->transChoice('messages.apples', 2));
+        $this->assertSame('3 яблока', $t->transChoice('messages.apples', 3));
+        $this->assertSame('4 яблока', $t->transChoice('messages.apples', 4));
+        $this->assertSame('22 яблока', $t->transChoice('messages.apples', 22));
+    }
+
+    /**
+     * Everything else (0, 5-20, 11-14, 25, ...) → "many" variant.
+     *
+     * @return void
+     */
+    public function test_slavic_locale_selects_many_variant_for_0_5_11_25(): void
+    {
+        $t = new Translator('ru', 'en', $this->langPath);
+
+        $this->assertSame('0 яблок', $t->transChoice('messages.apples', 0));
+        $this->assertSame('5 яблок', $t->transChoice('messages.apples', 5));
+        $this->assertSame('11 яблок', $t->transChoice('messages.apples', 11));
+        $this->assertSame('12 яблок', $t->transChoice('messages.apples', 12));
+        $this->assertSame('25 яблок', $t->transChoice('messages.apples', 25));
+    }
+
+    /**
+     * The Slavic rule only kicks in for a 3-variant message when the active
+     * locale is Slavic — an English (positional) message stays positional.
+     *
+     * @return void
+     */
+    public function test_non_slavic_locale_keeps_positional_selection(): void
+    {
+        $t = new Translator('en', 'en', $this->langPath);
+
+        // count=2 would be "few" under the Slavic rule, but 'en' keeps
+        // the existing positional formula: min(max(0, 2), 2) = index 2.
+        $this->assertSame('2 apples', $t->transChoice('messages.apples', 2));
     }
 }
