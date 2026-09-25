@@ -20,6 +20,9 @@
     "php": "^8.5",
     "ez-php/contracts": "^2.0"
   },
+  "suggest": {
+    "ext-intl": "Needed for LocaleFormatter (locale-aware number, currency and date formatting)"
+  },
   "require-dev": {
     "ez-php/docker": "^2.0",
     "ez-php/testing-application": "^2.0",
