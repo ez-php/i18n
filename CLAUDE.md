@@ -28,10 +28,11 @@ docker compose exec app composer full
 Executes in order:
 1. `sync_guidelines.php --check` — fails if any `CLAUDE.md` has drifted from this file
 2. `check_test_classes.php` — fails on a duplicate test class name (all packages share the `Tests\` namespace, so a collision is a fatal error in the aggregated run, not a test failure)
-3. `phpstan analyse` — static analysis, level 9, config: `phpstan.neon`
-4. `php-cs-fixer fix` — auto-fixes style (`@PSR12` + `@PHP83Migration` + strict rules)
+3. `check_module_deps.php` — fails when a package's code imports an ez-php package its `composer.json` does not declare (module `src`: `require`/`suggest`; tests: `require`/`require-dev` and their dependencies), or requires one it never uses
+4. `phpstan analyse` — static analysis, level 9, config: `phpstan.neon`
+5. `php-cs-fixer fix` — auto-fixes style (`@PSR12` + `@PHP83Migration` + strict rules)
    *(Note: `@PHP85Migration` does not exist yet in php-cs-fixer; `@PHP83Migration` is the highest available and is used intentionally even though the project targets PHP 8.5)*
-5. `phpunit` — all tests with coverage
+6. `phpunit` — all tests with coverage
 
 Individual commands when needed:
 ```
@@ -40,6 +41,7 @@ composer cs                  # CS Fixer only
 composer test                # PHPUnit only
 composer guidelines:check    # CLAUDE.md drift only
 composer test-classes:check  # duplicate test class names only
+composer module-deps:check   # undeclared / unused ez-php package dependencies only
 ```
 
 **PHPStan:** never suppress with `@phpstan-ignore-line` — always fix the root cause.
@@ -198,20 +200,22 @@ vendor/bin/docker-init
 
 This copies `Dockerfile`, `docker-compose.yml`, `.env.example`, `start.sh`, and `docker/` into the module, replacing `{{MODULE_NAME}}` placeholders. Existing files are never overwritten.
 
-Pass `--services` to merge MySQL/Redis/Meilisearch service definitions directly into `docker-compose.yml` and uncomment the matching sections in `.env.example`, instead of adapting them by hand afterward:
+Pass `--services` to merge MySQL/Redis/Meilisearch/Memcached/Mailpit service definitions directly into `docker-compose.yml` and uncomment the matching sections in `.env.example`, instead of adapting them by hand afterward:
 
 ```
 vendor/bin/docker-init --services=mysql
 vendor/bin/docker-init --services=redis
 vendor/bin/docker-init --services=meilisearch
 vendor/bin/docker-init --services=mysql,redis
+vendor/bin/docker-init --services=memcached,mailpit
 ```
 
-Pass `--extensions` to merge PHP extension install blocks (apt packages plus `docker-php-ext-install`/`pecl` lines) directly into `docker/app/Dockerfile`, instead of hand-editing it afterward — supported extensions: `bcmath`, `gmp`, `gd`, `imagick`:
+Pass `--extensions` to merge PHP extension install blocks (apt packages plus `docker-php-ext-install`/`pecl` lines) directly into `docker/app/Dockerfile`, instead of hand-editing it afterward — supported extensions: `bcmath`, `gmp`, `gd`, `imagick`, `memcached`, `apcu` (with `apc.enable_cli=1`):
 
 ```
 vendor/bin/docker-init --extensions=gmp,bcmath
 vendor/bin/docker-init --extensions=gd,imagick
+vendor/bin/docker-init --extensions=memcached,apcu
 ```
 
 When run from a module directory inside this monorepo, any requested extension not already present is also merged into the shared root `docker/app/Dockerfile` — the container `composer full` at the root actually runs against, distinct from the module's own standalone image.
@@ -267,7 +271,8 @@ Locale-based translator — loads PHP array language files and resolves keys wit
 
 ```
 src/
-├── Translator.php                — Loads lang files, resolves dot-notation keys, replaces :placeholders
+├── Translator.php                — Loads lang files, resolves dot-notation keys, replaces :placeholders; transChoice(): pipe variants or ICU plural messages
+├── IcuPluralFallback.php         — @internal: `=N`/`one`/`other` selection for ICU plural messages when ext-intl is missing
 ├── LocaleFormatter.php           — Locale-aware number/currency/date formatting via ext-intl (NumberFormatter, IntlDateFormatter)
 └── TranslatorServiceProvider.php — Reads app.locale, app.fallback_locales (chain, optional) / app.fallback_locale from config; binds Translator
 
@@ -361,11 +366,12 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 
 - **PHP array files, not YAML/JSON** — Arrays are parsed by the PHP engine (no parser needed, no extra dependency), cached by OPcache, and type-safe. Switching format would require adding a parser and losing OPcache benefits.
 - **Keys without a dot are returned as-is** — A key without a namespace separator cannot map to a file. Returning the raw key instead of throwing keeps rendering code simple (`echo $t->get('some.key')` is always safe).
-- **No locale auto-detection** — The active locale is set explicitly at construction (from config) or changed via `setLocale()`. Auto-detection from `Accept-Language` is the application's responsibility (e.g. in middleware).
+- **No locale auto-detection** — The active locale is set explicitly at construction (from config) or changed via `setLocale()`. Auto-detection from `Accept-Language` is `ez-php/framework`'s `LocaleNegotiationMiddleware` (this module has no HTTP dependency).
 - **Fallback supports an ordered chain** — `Translator`'s constructor accepts either a single fallback locale or an ordered `list<string>`; `resolveWithChain()` tries the active locale, then each fallback in order, before the raw key is returned. `TranslatorServiceProvider` wires this from the optional `app.fallback_locales` config key (falling back to the single `app.fallback_locale` when absent), so the chain is reachable from application config, not just direct construction.
 - **`setLocale()` does not invalidate the cache** — The cache is keyed by `locale/namespace`. Switching locale simply directs future lookups to a different cache bucket. Old buckets stay in memory for the request lifetime — this is acceptable since the number of locale/namespace combinations in a request is small.
 - **`Translator` is injected, not a static façade** — Unlike `Auth` and `Event`, the translator has no global state requirement. It should be constructor-injected. Use the container to resolve it.
-- **`transChoice()`'s Slavic one/few/many exception is scoped, not general CLDR support** — Only ru/uk/be (which all share one cardinal-plural formula: `n%10==1 && n%100!=11` → one, `n%10 in 2..4 && n%100 not in 12..14` → few, else many) are recognised, and only when the active locale's two-letter prefix matches **and** the message has exactly 3 pipe-separated variants — a message with a different variant count for those locales still falls back to the plain positional formula. Polish/Czech/Slovak (4 forms) and other CLDR families are intentionally not covered; adding them means adding their own rule, not generalising this one.
+- **Full CLDR plurals are opt-in per message, via ICU.** A translation of the form `{count, plural, one {…} few {…} many {…} other {…}}` (any variable name) is formatted by ext-intl's `MessageFormatter` with the active locale's CLDR rules — Polish's four forms, Arabic's six, `=N` exact matches, `#` for the count — and `:placeholders` are replaced afterwards as usual. Pipe messages are untouched, so existing translations behave exactly as before. Without ext-intl (a `suggest`), `IcuPluralFallback` picks `=N`, then `one` for 1, then `other`, so a message degrades instead of printing raw ICU syntax.
+- **`transChoice()`'s Slavic one/few/many exception is scoped, not general CLDR support** — Only ru/uk/be (which all share one cardinal-plural formula: `n%10==1 && n%100!=11` → one, `n%10 in 2..4 && n%100 not in 12..14` → few, else many) are recognised, and only when the active locale's two-letter prefix matches **and** the message has exactly 3 pipe-separated variants — a message with a different variant count for those locales still falls back to the plain positional formula. Other plural families don't get hand-written rules — they use ICU plural messages instead (next point).
 
 ---
 
@@ -383,8 +389,8 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 
 | Concern | Where it belongs |
 |---|---|
-| Locale auto-detection from `Accept-Language` | Application middleware |
-| Full CLDR plural rules (Polish's 4 forms, Arabic's 6, …) | Application layer or a future extension — `transChoice()` implements the positional `min(max(0, count), variants - 1)` formula for English-like zero/one/many languages, plus one scoped exception: the shared ru/uk/be Slavic one/few/many cardinal formula, used only when the active locale is Slavic **and** the message has exactly 3 variants (see Design Decisions) |
+| Locale auto-detection from `Accept-Language` | `ez-php/framework`'s `LocaleNegotiationMiddleware` |
+| ICU syntax beyond `plural` (select, selectordinal, nested arguments) and hand-written plural rules | Out of scope — full CLDR plurals come from ICU plural messages via ext-intl |
 | Date/number/currency formatting | PHP `Intl` extension, application layer |
 | Translation of validation error messages | `ez-php/validation` (injects `Translator` optionally) |
 | Loading translations from a database | Application-level `Translator` subclass or decorator |

@@ -104,6 +104,10 @@ final class Translator implements TranslatorInterface
      * has exactly 3 variants, the standard Slavic one/few/many cardinal formula
      * is used instead (variant[0]=one, variant[1]=few, variant[2]=many).
      *
+     * ICU plural messages (`{count, plural, one {# apple} other {# apples}}`) are
+     * formatted with the locale's full CLDR plural rules when ext-intl is loaded
+     * (`#` is the count); without it a minimal fallback picks `=N`, `one` or `other`.
+     *
      * The placeholder :count is automatically injected from $count unless overridden
      * in $replacements.
      *
@@ -126,16 +130,54 @@ final class Translator implements TranslatorInterface
             return $key;
         }
 
+        if (!isset($replacements['count'])) {
+            $replacements['count'] = $count;
+        }
+
+        $icu = $this->formatIcuPlural($message, $count);
+
+        if ($icu !== null) {
+            return $this->replace($icu, $replacements);
+        }
+
         $parts = explode('|', $message);
         $index = count($parts) === 3 && $this->isSlavicLocale()
             ? $this->slavicPluralIndex($count)
             : min(max(0, $count), count($parts) - 1);
 
-        if (!isset($replacements['count'])) {
-            $replacements['count'] = $count;
+        return $this->replace($parts[$index], $replacements);
+    }
+
+    /**
+     * Format an ICU plural message (`{count, plural, one {…} few {…} other {…}}`)
+     * with the full CLDR rules of the active locale via ext-intl's MessageFormatter,
+     * or IcuPluralFallback without ext-intl. Null for any other message (e.g. the
+     * pipe syntax), which then goes through the positional formula.
+     *
+     * @param string $message
+     * @param int    $count
+     *
+     * @return string|null
+     */
+    private function formatIcuPlural(string $message, int $count): ?string
+    {
+        if (preg_match('/^\s*\{\s*(\w+)\s*,\s*plural\s*,/', $message, $m) !== 1) {
+            return null;
         }
 
-        return $this->replace($parts[$index], $replacements);
+        if (class_exists(\MessageFormatter::class)) {
+            try {
+                $formatted = (new \MessageFormatter($this->locale, $message))->format([$m[1] => $count]);
+
+                if (is_string($formatted)) {
+                    return $formatted;
+                }
+            } catch (\Throwable) {
+                // Invalid pattern for ICU — fall through to the minimal reader.
+            }
+        }
+
+        return IcuPluralFallback::format($message, $count);
     }
 
     /**

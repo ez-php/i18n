@@ -46,6 +46,23 @@ echo $translator->get('messages.welcome', ['name' => 'Alice']);
 // Willkommen, Alice!
 ```
 
+### Plurals
+
+`transChoice()` accepts the simple pipe form (`'no apples|one apple|:count apples'`, chosen by
+position) or an ICU plural message, which uses the full CLDR rules of the locale when `ext-intl`
+is installed:
+
+```php
+// lang/pl/messages.php
+'apples' => '{count, plural, one {# jabłko} few {# jabłka} many {# jabłek} other {# jabłka}}',
+
+$translator->transChoice('messages.apples', 22); // "22 jabłka"
+$translator->transChoice('messages.apples', 25); // "25 jabłek"
+```
+
+`=0 {…}` matches an exact count, `#` is the count, and `:placeholders` still work. Without `ext-intl`
+only `=N`, `one` and `other` are used.
+
 ## Locale formatting
 
 `LocaleFormatter` wraps PHP's `ext-intl` extension to format numbers, currencies, and dates in a locale-aware way:
