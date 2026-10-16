@@ -78,9 +78,20 @@ final class IcuPluralTest extends TestCase
         self::assertSame('لا كتب', $t->transChoice('messages.books', 0));
         self::assertSame('كتاب', $t->transChoice('messages.books', 1));
         self::assertSame('كتابان', $t->transChoice('messages.books', 2));
-        self::assertSame('3 كتب', $t->transChoice('messages.books', 3));
-        self::assertSame('11 كتابًا', $t->transChoice('messages.books', 11));
-        self::assertSame('100 كتاب', $t->transChoice('messages.books', 100));
+        self::assertSame($this->arabicNumber(3) . ' كتب', $t->transChoice('messages.books', 3));
+        self::assertSame($this->arabicNumber(11) . ' كتابًا', $t->transChoice('messages.books', 11));
+        self::assertSame($this->arabicNumber(100) . ' كتاب', $t->transChoice('messages.books', 100));
+    }
+
+    /**
+     * `#` in an ICU message is formatted with the locale's default numbering system,
+     * which for `ar` depends on the ICU data version: ICU 76 yields Latin digits,
+     * the GitHub runner's ICU Arabic-Indic ones (`٣`). The test is about plural-form
+     * selection, so the expected digits come from the installed ICU.
+     */
+    private function arabicNumber(int $n): string
+    {
+        return (string) (new \NumberFormatter('ar', \NumberFormatter::DECIMAL))->format($n);
     }
 
     public function test_exact_matches_any_variable_name_and_colon_replacements(): void
