@@ -38,15 +38,23 @@ final class Translator implements TranslatorInterface
      * @param string               $locale          Active locale.
      * @param string|list<string>  $fallbackLocales Single fallback locale or ordered fallback chain.
      * @param string               $langPath        Absolute path to the lang/ directory.
+     *
+     * @throws \InvalidArgumentException When a locale is not a locale tag (see assertLocale()).
      */
     public function __construct(
         private string $locale,
         string|array $fallbackLocales,
         private readonly string $langPath,
     ) {
+        self::assertLocale($locale);
+
         $this->fallbackLocales = is_string($fallbackLocales)
             ? [$fallbackLocales]
             : $fallbackLocales;
+
+        foreach ($this->fallbackLocales as $fallback) {
+            self::assertLocale($fallback);
+        }
     }
 
     /**
@@ -216,12 +224,18 @@ final class Translator implements TranslatorInterface
     }
 
     /**
-     * @param string $locale
+     * Switch the active locale.
+     *
+     * @param string $locale A locale tag (`en`, `de_AT`, `zh-Hant-TW`).
+     *
+     * @throws \InvalidArgumentException When $locale is not a locale tag — it becomes part of a file path.
      *
      * @return void
      */
     public function setLocale(string $locale): void
     {
+        self::assertLocale($locale);
+
         $this->locale = $locale;
     }
 
@@ -342,5 +356,24 @@ final class Translator implements TranslatorInterface
         }
 
         return $message;
+    }
+
+    /**
+     * Reject anything that is not a BCP 47 / POSIX-style locale tag (`en`, `de_AT`,
+     * `zh-Hant-TW`). The locale becomes a directory in the path loadMessages()
+     * `require`s, so a value like `../../uploads` would otherwise include an
+     * arbitrary PHP file when an application passes request data to setLocale().
+     *
+     * @param string $locale
+     *
+     * @throws \InvalidArgumentException
+     *
+     * @return void
+     */
+    private static function assertLocale(string $locale): void
+    {
+        if (preg_match('/^[A-Za-z]{2,8}(?:[_-][A-Za-z0-9]{1,8})*$/D', $locale) !== 1) {
+            throw new \InvalidArgumentException("Invalid locale '{$locale}': expected a locale tag such as 'en', 'de_AT' or 'zh-Hant-TW'.");
+        }
     }
 }

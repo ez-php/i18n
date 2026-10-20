@@ -275,7 +275,7 @@ src/
 ├── Translator.php                — Loads lang files, resolves dot-notation keys, replaces :placeholders; transChoice(): pipe variants or ICU plural messages
 ├── IcuPluralFallback.php         — @internal: `=N`/`one`/`other` selection for ICU plural messages when ext-intl is missing
 ├── LocaleFormatter.php           — Locale-aware number/currency/date formatting via ext-intl (NumberFormatter, IntlDateFormatter)
-└── TranslatorServiceProvider.php — Reads app.locale, app.fallback_locales (chain, optional) / app.fallback_locale from config; binds Translator
+└── TranslatorServiceProvider.php — Reads app.locale, app.fallback_locales (chain, optional) / app.fallback_locale, app.lang_path from config; binds Translator, TranslatorInterface, LocaleFormatter
 
 tests/
 ├── TestCase.php                          — Base PHPUnit test case
@@ -318,7 +318,7 @@ Placeholders are `:name` style (colon prefix). Replacement values may be `string
 
 **Lazy file loading with per-locale/namespace caching** — each `lang/<locale>/<namespace>.php` is loaded once via `require` and cached in `$cache`. Subsequent calls to the same locale+namespace read from the array. Files that do not exist or do not return an array are cached as `[]`.
 
-**`setLocale(string $locale): void`** — changes the active locale at runtime (e.g. per-request based on `Accept-Language`). Does not invalidate the cache.
+**`setLocale(string $locale): void`** — changes the active locale at runtime (e.g. per-request based on `Accept-Language`). Does not invalidate the cache. Throws `InvalidArgumentException` for anything that is not a locale tag (`^[A-Za-z]{2,8}([_-][A-Za-z0-9]{1,8})*$`); the constructor checks the active and every fallback locale the same way.
 
 ---
 
@@ -358,8 +358,11 @@ Reads `app.locale` and the fallback locale(s) from `Config` and binds `Translato
 | `app.locale` | `'en'` | Active locale at boot time |
 | `app.fallback_locales` | — | Optional ordered fallback chain (`list<string>`); takes precedence over `app.fallback_locale` when set to a non-empty array. Not env-backed — set directly in `config/app.php` |
 | `app.fallback_locale` | `'en'` | Single fallback locale, used when `app.fallback_locales` is absent |
+| `app.lang_path` | `''` | Absolute path to the `lang/` directory. The template's `config/app.php` sets it to `<project>/lang`; with the empty default every lookup misses and the raw key is returned |
 
-The `lang/` path is resolved via `$app->basePath('lang')`.
+The `lang/` path is read from `app.lang_path` — the provider does not derive it from the application base path.
+
+`LocaleFormatter` is bound too, constructed with `app.locale`.
 
 ---
 
@@ -369,6 +372,7 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 - **Keys without a dot are returned as-is** — A key without a namespace separator cannot map to a file. Returning the raw key instead of throwing keeps rendering code simple (`echo $t->get('some.key')` is always safe).
 - **No locale auto-detection** — The active locale is set explicitly at construction (from config) or changed via `setLocale()`. Auto-detection from `Accept-Language` is `ez-php/framework`'s `LocaleNegotiationMiddleware` (this module has no HTTP dependency).
 - **Fallback supports an ordered chain** — `Translator`'s constructor accepts either a single fallback locale or an ordered `list<string>`; `resolveWithChain()` tries the active locale, then each fallback in order, before the raw key is returned. `TranslatorServiceProvider` wires this from the optional `app.fallback_locales` config key (falling back to the single `app.fallback_locale` when absent), so the chain is reachable from application config, not just direct construction.
+- **Locales are validated because they are path segments** — `loadMessages()` `require`s `<langPath>/<locale>/<namespace>.php`, so an unvalidated `setLocale($request->query('lang'))` could include any `.php` file on disk via `../`. The framework's `LocaleNegotiationMiddleware` already maps `Accept-Language` onto an allow-list, but `setLocale()` is public API, so the check lives in the translator itself.
 - **`setLocale()` does not invalidate the cache** — The cache is keyed by `locale/namespace`. Switching locale simply directs future lookups to a different cache bucket. Old buckets stay in memory for the request lifetime — this is acceptable since the number of locale/namespace combinations in a request is small.
 - **`Translator` is injected, not a static façade** — Unlike `Auth` and `Event`, the translator has no global state requirement. It should be constructor-injected. Use the container to resolve it.
 - **Full CLDR plurals are opt-in per message, via ICU.** A translation of the form `{count, plural, one {…} few {…} many {…} other {…}}` (any variable name) is formatted by ext-intl's `MessageFormatter` with the active locale's CLDR rules — Polish's four forms, Arabic's six, `=N` exact matches, `#` for the count — and `:placeholders` are replaced afterwards as usual. Pipe messages are untouched, so existing translations behave exactly as before. Without ext-intl (a `suggest`), `IcuPluralFallback` picks `=N`, then `one` for 1, then `other`, so a message degrades instead of printing raw ICU syntax.
@@ -392,7 +396,7 @@ The `lang/` path is resolved via `$app->basePath('lang')`.
 |---|---|
 | Locale auto-detection from `Accept-Language` | `ez-php/framework`'s `LocaleNegotiationMiddleware` |
 | ICU syntax beyond `plural` (select, selectordinal, nested arguments) and hand-written plural rules | Out of scope — full CLDR plurals come from ICU plural messages via ext-intl |
-| Date/number/currency formatting | PHP `Intl` extension, application layer |
+| Formatting beyond `LocaleFormatter`'s number/currency/date/dateTime helpers (custom patterns, units, relative time) | Application layer, on ext-intl directly |
 | Translation of validation error messages | `ez-php/validation` (injects `Translator` optionally) |
-| Loading translations from a database | Application-level `Translator` subclass or decorator |
+| Loading translations from a database | Application-level `TranslatorInterface` decorator (`Translator` is `final`) |
 | Message compilation / caching to PHP files | Out of scope — OPcache handles PHP array files natively |

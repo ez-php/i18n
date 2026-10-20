@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\I18n;
 
 use EzPhp\I18n\Translator;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -256,6 +258,68 @@ final class TranslatorTest extends TestCase
 
         $this->assertSame('de', $t->getLocale());
         $this->assertSame('Hallo Max!', $t->get('messages.hello', ['name' => 'Max']));
+    }
+
+    /**
+     * The locale becomes a directory name in the path loadMessages() requires, so a
+     * value like "../../uploads" must never reach it — setLocale() may be fed request data.
+     *
+     * @return void
+     */
+    #[DataProvider('invalidLocales')]
+    public function test_set_locale_rejects_values_that_are_not_locale_tags(string $locale): void
+    {
+        $t = new Translator('en', 'en', $this->langPath);
+
+        try {
+            $t->setLocale($locale);
+            $this->fail("'{$locale}' must be rejected");
+        } catch (InvalidArgumentException) {
+            $this->assertSame('en', $t->getLocale());
+        }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidLocales(): array
+    {
+        return [
+            'parent directory' => ['../../storage/uploads'],
+            'absolute path' => ['/etc'],
+            'empty' => [''],
+            'null byte' => ['de '],
+            'too short' => ['d'],
+            'dot segment' => ['de.php'],
+        ];
+    }
+
+    /**
+     * @return void
+     */
+    public function test_constructor_rejects_an_invalid_locale_or_fallback(): void
+    {
+        try {
+            new Translator('../x', 'en', $this->langPath);
+            $this->fail('an invalid active locale must be rejected');
+        } catch (InvalidArgumentException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+
+        new Translator('de', ['en', '../../x'], $this->langPath);
+    }
+
+    /**
+     * @return void
+     */
+    public function test_regional_and_script_tags_are_accepted(): void
+    {
+        $t = new Translator('de_AT', ['de-CH', 'zh-Hant-TW', 'en'], $this->langPath);
+        $t->setLocale('pt_BR');
+
+        $this->assertSame('pt_BR', $t->getLocale());
     }
 
     /**
