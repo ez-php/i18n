@@ -281,6 +281,7 @@ src/
 tests/
 ├── TestCase.php                          — Base PHPUnit test case
 ├── PluralTest.php  — Tests Translator::transChoice() — pipe-separated plural variant selection
+├── I18n/ApplicationTestCase.php          — base class for tests that need a bootstrapped Application
 ├── I18n/IcuPluralTest.php  — ICU plural messages in transChoice(): full CLDR rules through ext-intl, and the ext-intl-free fallback
 ├── FallbackChainTest.php  — Tests the fallback locale chain: Translator accepts an ordered list of fallback locales and tries each in turn before returning the raw key
 ├── TranslatorTest.php                    — Covers Translator: key resolution, fallback, placeholders, caching
