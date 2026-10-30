@@ -288,7 +288,7 @@ final class TranslatorTest extends TestCase
             'parent directory' => ['../../storage/uploads'],
             'absolute path' => ['/etc'],
             'empty' => [''],
-            'null byte' => ['de '],
+            'null byte' => ["de\0"],
             'too short' => ['d'],
             'dot segment' => ['de.php'],
         ];
